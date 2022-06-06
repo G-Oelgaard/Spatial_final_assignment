@@ -14,7 +14,7 @@ This script mainly utilises two datasets.
 - Link to original database: https://webs.ucm.es/info/cliwoc/
 - Link to updated database: https://www.historicalclimatology.com/cliwoc.html
 
-**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <u>route effiecieny is based exclusivly on east-west currents</u>
+**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <ins>route effiecieny is based exclusivly on east-west currents</ins>
 
 ## ------ REPO STRUCTURE ------
 "src" FOLDER:
