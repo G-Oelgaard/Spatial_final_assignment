@@ -10,9 +10,11 @@ This repository contains a R-markdown script that takes data from CLIWOC and Glo
 ## ------ DATA ------
 This script mainly utilises two datasets.
 
-**Cli**matological Database for the **W**orld's **Oc**eans**, or **CLIWOC** for short, contains ca. 287.000 different logbook entries across 8 nations from 1662-1855. However, that vast majority of these are from british, dutch, french and spanish ships from 1750-1850, and the script will filter out all other nations. The original EU-funded project was created in the early 2000's as a cooperation across a range of different unversities. Although it was intended to be used to, as the name might suggest, map and research climatological behavior and changes, it has since been used for a wide range of different purposes. AS onnen could expect from a project created in the early 2000's, 
+**Cli**matological Database for the **W**orld's **Oc**eans**, or **CLIWOC** for short, contains ca. 287.000 different logbook entries across 8 nations from 1662-1855. However, that vast majority of these are from british, dutch, french and spanish ships from 1750-1850, and the script will filter out all other nations. The original EU-funded project was created in the early 2000's as a cooperation across a range of different unversities. Although it was intended to be used to, as the name might suggest, map and research climatological behavior and changes, it has since been used for a wide range of different purposes. A might have been expect from a project created in the early 2000's, it is however not very accesiable as it requires the use of programs such as MS ACCESS. Thankfully the database has been updated by others and can now in more modern formats. The table explaining each variable found onn the original website, is however still of immense value.
+- Link to original database: https://webs.ucm.es/info/cliwoc/
+- Link to updated database: https://www.historicalclimatology.com/cliwoc.html
 
-**GlobCurrent** provided that files needed to create the currents raster. While the original files had 
+**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the __route effiecieny is based exclusivly on east-west currents__
 
 ## ------ REPO STRUCTURE ------
 "src" FOLDER:
