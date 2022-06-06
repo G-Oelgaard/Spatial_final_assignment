@@ -15,7 +15,7 @@ This script mainly utilises two datasets.
 - Link to updated database: https://www.historicalclimatology.com/cliwoc.html
 
 
-**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <ins>route effiecieny is based exclusivly on east-west currents!</ins> The data used was the total surface currents on the first of january 1993. As ocean currents have been observed to be accelerating in recent years, it was important to use the oldest data available to best model currents that match those 150+ years earlier. Access to the data requires a free and simple registration.
+**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <ins>route effiecieny is based exclusivly on east-west currents!</ins> The data used was the total surface currents on the first of january 1993. As ocean currents have been observed to be accelerating in recent years, it was important to use the oldest data available to best model currents that might match those 150+ years earlier. Access to the data requires a free and simple registration.
 - Link to GlobCurrent: http://globcurrent.ifremer.fr
 - Path to data: data/globcurrent/v3.0/global_025_deg/total_hs/1993/001/19930101-GLOBCURRENT-L4-CUReul_hs-ALT_SUM-v03.0-fv01.0.nc
 
