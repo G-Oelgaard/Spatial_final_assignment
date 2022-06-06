@@ -8,10 +8,11 @@ This repository contains a R-markdown script that takes data from CLIWOC and Glo
 
 
 ## ------ DATA ------
-This script main utilises two datasets.
+This script mainly utilises two datasets.
 
-**Cli**matological Database for the **W**orld's **Oc**eans**, or **CLIWOC** for short, contains ca. 287.000 different logbook entries across 8 nations from 1662-1855. However, that vast majority of these are from british, dutch, french and spanish ships from 1750-1850, and the script will filter out all other nations. 
+**Cli**matological Database for the **W**orld's **Oc**eans**, or **CLIWOC** for short, contains ca. 287.000 different logbook entries across 8 nations from 1662-1855. However, that vast majority of these are from british, dutch, french and spanish ships from 1750-1850, and the script will filter out all other nations. The original EU-funded project was created in the early 2000's as a cooperation across a range of different unversities. Although it was intended to be used to, as the name might suggest, map and research climatological behavior and changes, it has since been used for a wide range of different purposes. AS onnen could expect from a project created in the early 2000's, 
 
+**GlobCurrent** provided that files needed to create the currents raster. While the original files had 
 
 ## ------ REPO STRUCTURE ------
 "src" FOLDER:
