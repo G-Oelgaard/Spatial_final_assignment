@@ -14,31 +14,20 @@ This script mainly utilises two datasets.
 - Link to original database: https://webs.ucm.es/info/cliwoc/
 - Link to updated database: https://www.historicalclimatology.com/cliwoc.html
 
-**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <ins>route effiecieny is based exclusivly on east-west currents</ins>
+
+**GlobCurrent** provided that files needed to create the currents raster. While the original files also had the direction of ocean currents, that information was lost when converted to a raster file. As the north-south current raster was deemed unusable, the <ins>route effiecieny is based exclusivly on east-west currents!</ins> The data used was the total surface currents on the first of january 1993. As ocean currents have been observed to be accelerating in recent times, it was important to use the oldest data available to best model currents that match those 150+ years earlier. Access to the data requires a free and simple registration.
+- Link to GlobCurrent: http://globcurrent.ifremer.fr
+- Path to data: data/globcurrent/v3.0/global_025_deg/total_hs/1993/001/19930101-GLOBCURRENT-L4-CUReul_hs-ALT_SUM-v03.0-fv01.0.nc
+
+Finally a geojson containing a shapefile of the currents was used to illustrate the shortcommings of the abovementioned currents raster.
+- Link: https://data.amerigeoss.org/en/dataset/major-ocean-currents-arrowpolys-1m-104/resource/9ccf6bbb-c2d3-44be-bcd4-7e429a876e72
 
 ## ------ REPO STRUCTURE ------
-"src" FOLDER:
-- This folder contains the .py scripts to create the image classification model and to predict images.
-- The precreated / pretrained model created from the model creation script
-
-"in" FOLDER:
-- This is where the data used in the scripts should be placed. In other words this is where the movie posters train and test data should be placed.
-- Any posters that you wish to predict using the poster_prediction.py script should be placed in the "Prediction_images" folder.
-
-"out" FOLDER:
-- This is where the model, history plot and classification report will be saved
-
-"utils" FOLDER:
-- This folder should include all utility scripts used by the main script.
+"data" FOLDER:
+- This folder contains all data used by the r-markdown
+- The .RData files are created by the script, but can be downloaded instead, as the code needed to create them take 1.5-2.5 hours each.
 
 ## ------ SCRIPT USAGE ------
-- The model_creation.py script requires you to give the arguments "-e" / "--epoch" (how many epochs you want it to train) and "-b" / "--batch" (for batchsize). The pretrained model was created with 10 epochs and batchsize 128
-
-- The poster_prediction.py script requires you to give the argument "-i" / "--image" (the name of the image you want to predict)
+The code should work without any major input from the user. The only exception is if the user wants to run the code chunks that last 1.5+ hours instead of loading the pre-created data. In that case the user needs to uncomment the relevant codechucks and comment out the following "readRDS()" code.
 
 ## ------ RESULTS ------
-Even with the different optimisations of the model, it did not become good at predicting whether or not a movie is good or bad based on its poster. There is almost as if there is a 50 / 50 chance of it guessing correctly or wrong. Notable critically appraised movies such as Batman (2022) or Dune were categorized as bad.
-
-Another issue with the model is that it suffers from an apperant overfitting, as the val_accuracy of the model is stable, the val_loss is rising while train_accuracy is rising and train_loss is falling.
-
-In short: a model can't predict what this model is trying to predict. This follows in line with other models that have tried to do the same thing (such as https://www.kaggle.com/code/phiitm/can-we-judge-a-movie-by-it-s-poster).
