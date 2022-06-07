@@ -4,6 +4,23 @@ Repository for the spatial assignment - Sea voyages in the 18th and 19th century
 ## ------ SCRIPT DESCRIPTION ------
 This repository contains a R-markdown script that takes data from CLIWOC and Globcurrents to asses sea routes and how effeciency they are in choosing routes that sail with the surface currents of the ocean.
 
+## ------ REQUIREMENTS ------
+**Program requirements**
+- R v. 4.1.1
+- R-Studio v.1.4.1717
+
+**Package requirements**
+- tidyverse v. 1.3.1
+- sf v. 1.0-4
+- raster v. 3.5-2
+- geojsonsf v. 2.0.1
+- rgdal v. 1.5-27
+- ncdf4 v. 1.19
+- RColorBrewer v. 1.1-2
+- maptools v. 1.1-2
+- ggplot2 v. 3.3.5
+- scales v. 1.2.0
+
 ## ------ DATA ------
 This script mainly utilises two datasets.
 
