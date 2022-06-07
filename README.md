@@ -2,7 +2,7 @@
 Repository for the spatial assignment - Sea voyages in the 18th and 19th century. 
 
 ## ------ SCRIPT DESCRIPTION ------
-This repository contains a R-markdown script that takes data from CLIWOC and Globcurrents to asses sea routes and how effeciency they are in choosing routes that sail with the surface currents of the ocean.
+This repository contains a R-markdown script that takes data from CLIWOC and Globcurrents to plot, measure and assess sea routes and how effeciency their voyages were based on ocean surface currents.
 
 ## ------ REQUIREMENTS ------
 **Program requirements**
