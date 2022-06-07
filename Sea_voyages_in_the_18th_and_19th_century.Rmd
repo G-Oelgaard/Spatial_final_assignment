@@ -1,0 +1,560 @@
+---
+title: "Sea voyages in the 18th and 19th century"
+author: "Gustav Ølgaard"
+date: "6/7/2022"
+output: html_document
+---
+
+In the age of sail what routes did sea voyages take and how long and efficient were they? This script will examines these questions using the database CLIWOC containing 287.000 logbook entries and a currents raster obtained from GlobCurrent. The efficiency of voyages was measured by determining whether voyages sailed with or against ocean surface currents. However, due to the absence of a north-south currents raster and considerations on the influence of wind, the results were flawed.
+
+First things first, we need to install annd load relevant packages:
+```{r}
+library(raster)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(geojsonsf)
+library(rgdal)
+library(ncdf4)
+library(RColorBrewer)
+library(maptools)
+library(scales)
+```
+
+##Loading our data##
+Lets also load our map data using maptools. The crs 4326 (WGS 84) is used as it is both the most common, and perfect as it is a equidistant projection made for navigation.
+
+```{r}
+sf::sf_use_s2(FALSE) #Needed or else errors will occur
+
+data(wrld_simpl)
+world <- st_as_sf(wrld_simpl, crs = 4326)
+```
+
+Then we need to download our data. The data used is from the major EU-funded project Climatological Database for the World's Oceans - or CLIWOC for short. While the original data was made for microsoft access and is now unavailable, the data can now be found on the website https://www.historicalclimatology.com/cliwoc.html
+```{r}
+CLIWOC_whole <- read_csv2("data/cliwoc21.csv")
+```
+
+As the data contains a 180 different columns of information, most which are irrelevant to use, we need to filter the dataset down a bit. 
+Only the following columns have been saved for further use: "YR","MO","DY","latitude","longitude","Nationality","VoyageIni","ID".
+
+```{r}
+CLIWOC_whole_route <- CLIWOC_whole %>% 
+  select(c("YR","MO","DY","latitude","longitude","Nationality","VoyageIni","ID")) %>% 
+  filter(!is.na(as.numeric(longitude))) %>% # removing all entries without coordinates
+  filter(!is.na(as.numeric(latitude))) 
+```
+
+As the ID provided aren't unique for every single voyage, a new "Identifier" variable is created from the VoyageIni (the day the voyage starts), and the ID.
+
+```{r}
+# Creating unique voyage identification number based on a combination of the VoyageIni and Id
+CLIWOC_whole_route$Identifier <- paste(CLIWOC_whole_route$VoyageIni, CLIWOC_whole_route$ID, sep="")
+```
+
+Only a few records exists that are not British, Dutch, Spanish or French, and script will therefor only make use of these four major nations.
+
+```{r}
+CLIWOC_whole_route_selected <- CLIWOC_whole_route %>% 
+  filter(Nationality %in% c("BRITISH","DUTCH","SPANISH","FRENCH"))
+```
+
+##Creating the linestrings##
+
+As we want to plot our voyages as linestrings, we need to remove any Identifiers that only have one entry, as they are unplottable and unusable for the calculations we want to do later.
+
+```{r}
+# Removing voyages with only one entry as they aren't really voyages at all.
+CLIWOC_Voyages <- CLIWOC_whole_route_selected %>% 
+  count(Identifier) %>% 
+  filter(n <= 1)
+
+CLIWOC_Voyages_selected <- CLIWOC_whole_route_selected %>% 
+  filter(!Identifier %in% CLIWOC_Voyages$Identifier)
+```
+
+Now we can transform our data into a spatial object.
+
+```{r}
+CLIWOC_route_SF <- st_as_sf(CLIWOC_Voyages_selected, remove=F, coords = c("longitude", "latitude"), crs = 4326)
+```
+
+##Plotting routes##
+As some voyages are missing entries, we sometimes end out with a voyage meticulously logging their course in the Indian ocean, but the missing course coordinates until they reach Europe. This results in some voyages seemingly magicaly sailing across whole continents. While funny, they also tend to schew any distance mesurements made later. So lets remove them!
+
+```{r}
+# Setting next_geometry value to that of the geometry of the next row (the next point)
+CLIWOC_route_SF_next <- CLIWOC_route_SF %>% 
+  group_by(Identifier) %>% 
+  mutate(next_geometry = lead(geometry)) %>% 
+  ungroup()
+```
+
+```{r}
+# Transforming coordinates into spatial objects
+geom <- st_as_sf(CLIWOC_route_SF_next$geometry,crs=4326)
+nx_geom <- st_as_sf(CLIWOC_route_SF_next$next_geometry,crs=4326)
+```
+
+This next code block calculates the distance between a givne point and the next point in the voyage. This can then be used to filter out any suspsiously large distances (I.e. the magical landgoing ships mentioned earlier). However, **it takes over 1.5 hours to run**. If you wish to run it, simply uncomment this code chunck and comment out the one starting at line 121. If not, the code will simply load the data from a previous run.
+```{r}
+#dist_new <- c()
+#for (i in 1:nrow(geom)) {
+#  dist_new[i] = st_distance(geom[i,],nx_geom[i,], 
+#                           by_element = TRUE) / 1000
+#}
+
+#saveRDS(dist_new, file="distance_list.RData")
+```
+
+```{r}
+# load data from previous run
+dist_new <- readRDS("data/distance_list.RData")
+```
+
+```{r}
+# Adding distances to dataset
+CLIWOC_route_SF_next$distance_to_next <- dist_new
+```
+
+```{r}
+# Find lengths between points that are suspisiously long. aka. most likly go through land areas
+long_routes <- CLIWOC_route_SF_next %>% 
+  group_by(Identifier) %>%
+  filter(distance_to_next >= 2000)
+```
+
+```{r}
+# sort out long routes
+CLIWOC_route_SF_new <- CLIWOC_route_SF_next %>% 
+  filter(!Identifier %in% long_routes$Identifier)
+```
+
+```{r}
+# remove next geometry column. Needed to be able to create accurate linestrings
+CLIWOC_route_SF_new$next_geometry <- NULL
+```
+
+We also need to find all Identifiers where the longitude is close to the edge of the map (aka. voyages that sail across the pacific). This is needed as the linestring don't know how to wrap around the world. Instead they create crazy straight lines from one side of the map the other. If not removed, these lines also mess with our distance mesurements. Because these edge coordinates are next to each other in real life, the actual distance between them is not very great, and as such they weren't removed earlier.
+
+```{r}
+pacific_routes_east <- CLIWOC_route_SF_new %>% 
+  filter(longitude >= 173)
+
+pacific_routes_west <- CLIWOC_route_SF_new %>% 
+  filter(longitude <= -173)
+```
+
+```{r}
+pacific_routes <- pacific_routes_east %>% 
+  filter(Identifier %in% pacific_routes_west$Identifier)
+```
+
+```{r}
+CLIWOC_route_SF_new <- CLIWOC_route_SF_new %>% 
+  filter(!Identifier %in% pacific_routes$Identifier)
+```
+
+Now we can finally transform our points into lines...
+
+```{r}
+CLIWOC_route_SF_new_line <- CLIWOC_route_SF_new %>% 
+  group_by(Identifier) %>%
+  summarise(do_union = FALSE) %>% 
+  st_cast("LINESTRING")
+```
+
+... and plot them on a map!
+```{r}
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=CLIWOC_route_SF_new_line, col="red", lwd=0.007) +
+  labs(title = "All voyages") +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+```
+
+Look at all the pretty voyages.
+
+However, it seems our column containing nationality was filtered out some time earlier, so lets add then again
+
+```{r}
+#Voyages by nationality
+Spanish_routes <- CLIWOC_route_SF[,c("Nationality","Identifier")] %>% 
+  group_by(Identifier) %>%
+  filter(Nationality == "SPANISH")
+
+Dutch_routes <- CLIWOC_route_SF[,c("Nationality","Identifier")] %>% 
+  group_by(Identifier) %>%
+  filter(Nationality == "DUTCH")
+
+British_routes <- CLIWOC_route_SF[,c("Nationality","Identifier")] %>% 
+  group_by(Identifier) %>%
+  filter(Nationality == "BRITISH")
+
+French_routes <- CLIWOC_route_SF[,c("Nationality","Identifier")] %>% 
+  group_by(Identifier) %>%
+  filter(Nationality == "FRENCH")
+```
+
+```{r}
+# Removing the geometry column as they are points and we're adding them to linestrings.
+Spanish_routes$geometry <- NULL
+Dutch_routes$geometry <- NULL
+British_routes$geometry <- NULL
+French_routes$geometry <- NULL
+
+# remove duplicate identifiers.
+Spanish_routes <- Spanish_routes[!duplicated(Spanish_routes$Identifier),]
+Dutch_routes <- Dutch_routes[!duplicated(Dutch_routes$Identifier),]
+British_routes <- British_routes[!duplicated(British_routes$Identifier),]
+French_routes <- French_routes[!duplicated(French_routes$Identifier),]
+
+# Join the nationalities into one big dataframe
+nationalities <- full_join(Spanish_routes, Dutch_routes)
+nationalities <- full_join(nationalities, British_routes)
+nationalities <- full_join(nationalities, French_routes)
+
+# Add to to the dataframe containing the linestrings and remove duplicates for good sakes measure.
+Cliwoc_nationalities_line <- left_join(CLIWOC_route_SF_new_line, nationalities)
+Cliwoc_nationalities_line <- Cliwoc_nationalities_line[!duplicated(Cliwoc_nationalities_line$Identifier),]
+```
+
+Now we can also plot the voyages by nation.
+
+```{r}
+# All voyages in one
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_nationalities_line, aes(col=Nationality), lwd=0.007, key_glyph="rect") +
+  labs(title = "All voyages - all nation") +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+
+# Voyages split into four different plots.
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_nationalities_line, lwd=0.007, col="red") +
+  labs(title = "All voyages - by nation") +
+  theme(plot.title = element_text(hjust=0.5, size = 16)) +
+  facet_wrap(~ Nationality)
+```
+
+##Calculating route distances##
+Now we have done some data wrangling and removed all outlier voyages. Now to measure the distance of the remaining ones.
+
+```{r}
+# Caluculating the average distance of voyages in km
+Cliwoc_nationalities_line$Distance_SeaMiles <- unclass(st_length(Cliwoc_nationalities_line)) / 1852
+Cliwoc_nationalities_line$Distance_KM <- unclass(st_length(Cliwoc_nationalities_line)) / 1000
+
+print("Average distance in sea miles:")
+mean(Cliwoc_nationalities_line$Distance_SeaMiles)
+print("Average distance in kilometers:")
+mean(Cliwoc_nationalities_line$Distance_KM)
+```
+
+```{r}
+# Adding to dataframe
+CLiwoc_long_routes <- Cliwoc_nationalities_line %>% 
+  filter(Distance_KM >= 9075)
+
+CLiwoc_short_routes <- Cliwoc_nationalities_line %>% 
+  filter(Distance_KM <= 9074.9)
+```
+
+And lastly we can plot routes under or over the average + the longest route.
+
+```{r}
+# Plotting voyages over and under the average length
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=CLiwoc_long_routes, aes(col="Over average"), lwd=0.007, alpha=0.5, key_glyph="rect") +
+  geom_sf(data=CLiwoc_short_routes, aes(col="Under average"), lwd=0.007, alpha=0.5, key_glyph="rect") +
+  labs(title = "Voyage lengths") +
+  scale_color_manual(name="Lengths", values = c("Over average" = "red", "Under average" = "blue"), labels=c("Over average", "Under average")) +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+
+# Finding the longest route. I did this manually to speed things up.
+Longest_route <- Cliwoc_nationalities_line %>% 
+  filter(Identifier == 180406141353)
+
+# Plotting the longest route
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Longest_route, col="red", alpha=0.5, key_glyph="rect") +
+  labs(title = "The longest voyage in the data") +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+```
+
+As we now have the lengths of all routes, we can also create a histogram to create a better overview of their distribution. Two histograms will be created: one containing all voyages and one split into nations.
+
+```{r}
+# All voyage lengths histogram
+ggplot(Cliwoc_nationalities_line, aes(x = Distance_KM)) +
+  geom_histogram(col="black", fill="grey") +
+  labs(title = "Voyage length histogram") +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+
+# Voyages length by nation histogram
+ggplot(Cliwoc_nationalities_line, aes(x = Distance_KM)) +
+  geom_histogram(col="black", fill="grey") +
+  facet_wrap(~ Nationality) +
+  labs(title = "Voyage length histogram - by nation") +
+  theme(plot.title = element_text(hjust=0.5, size = 16))
+```
+
+## Plotting Ocean Currents ##
+Before we can determine the efficiency of voyages, we first need to save and plot our ocean currents raster. The data was obtained from GlobCurrent
+
+First we need to load the data. Lets try loading both the north-south and east-west currents...
+```{r}
+Current_raster_focus <- raster("data/199301-GLOBCURRENT_glob_25_total_hs.nc", var="eastward_eulerian_current_velocity")
+Current_raster_focus_north <- raster("data/199301-GLOBCURRENT_glob_25_total_hs.nc", var="northward_eulerian_current_velocity")
+```
+
+... and plotting them.
+```{r}
+pal <- brewer.pal(n = 11, name = "RdBu")
+plot(Current_raster_focus, col = pal, main ="Surface currents (east-west)")
+plot(st_geometry(world), add=T)
+
+plot(Current_raster_focus_north, col = pal, main ="Surface currents (north-south)")
+plot(st_geometry(world), add=T)
+```
+
+It seems as if the north-south currents didn't turn out the way they were supposed. Nevertheless the east-west currents raster seems great.
+
+##Adding direction of voyages##
+Before we can accuratly determine voyage efficiency, we also need to determine which way the ships are actually sailing. We do this by comparing the coordinates their start and end destination. While this does not create a perfect split, it does characterise all voyages going in a general east or west direction. 
+```{r}
+# Creating a dataframe with the start and end point of each voyage
+East_routes <- CLIWOC_route_SF_new %>%
+  group_by(Identifier) %>%
+  slice(c(1, n())) %>%
+  ungroup()
+```
+
+```{r}
+# Filter only routes where the first longitude is lower than the last. Meaning that the ship ends up in a more eastern position.
+East_routes <- East_routes %>% 
+  group_by(Identifier) %>% 
+  filter(longitude < lead(longitude)) %>% 
+  ungroup()
+```
+
+```{r}
+# Adding the results to our dataframe
+Cliwoc_nationalities_line$direction <- "West going"
+
+Cliwoc_nationalities_line$direction[Cliwoc_nationalities_line$Identifier %in% East_routes$Identifier] <- "East going"
+```
+
+Lets see how that looks.
+
+```{r}
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_nationalities_line, aes(col=direction), lwd=0.007, alpha=0.75, key_glyph="rect", show.legend = F) +
+  labs(title = "Voyage direction") +
+  theme(plot.title = element_text(hjust=0.5, size = 16)) +
+  facet_wrap(~ direction)
+```
+
+It looks great. We can already see a big difference in the routes taken by eastward and westward going ships. We must be on the right track.
+
+## Extracting values from raster ##
+Now to the interesting part: extracting the values from our raster based on the routes. It is this part that let's us assess how efficient the routes taken actually are.
+
+However, like when we needed to measure the distance between points in the voyage, this requires alot of calculations and time. When this code was first run it took over 2 hours. This is caused both because of the many calculations needed, but also due to the sheer size of the dataset.
+
+If you wish to run it yourself, you need only to uncomment the code chunk below and comment out code chuck 378. If not them we will use data from a previous run.
+
+```{r}
+#currents <- raster::extract(Current_raster_focus, CLIWOC_route_SF_new_line)
+#saveRDS(currents, file="currents.RData")
+```
+
+```{r}
+# Loading the data from a previous run
+currents <- readRDS("data/currents.RData")
+
+currents_sum <- sapply(currents, sum, na.rm=TRUE)
+```
+
+```{r}
+# Adding results to a data frame
+CLIWOC_route_SF_raster_line <- Cliwoc_nationalities_line
+CLIWOC_route_SF_raster_line$route_effeciency <- currents_sum
+```
+
+To make our results show the actual efficiency of the voyages, no matter their direction, we need to reverse the results of all westward going voyages.
+
+```{r}
+CLIWOC_route_SF_raster_line$route_effeciency <- ifelse(CLIWOC_route_SF_raster_line$direction == "West going", (CLIWOC_route_SF_raster_line$route_effeciency)*-1, CLIWOC_route_SF_raster_line$route_effeciency)
+```
+
+Finally we can plot our results into some histograms that should give us a better overview.
+
+```{r}
+# Plotting result to histogram
+ggplot(CLIWOC_route_SF_raster_line, aes(x = route_effeciency)) +
+  geom_histogram(col="black", fill="grey", bins=20) +
+  labs(title = "Histogram of voyage efficiency", subtitle = "determined by routing with or against ocean currents", x="Voyage efficiency", y="number of voyages") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5))
+
+# Plotting results to histogram by nation
+ggplot(CLIWOC_route_SF_raster_line, aes(x = route_effeciency)) +
+  geom_histogram(col="black", fill="grey", bins=20) +
+  labs(title = "Histogram of voyage efficiency - by nation", subtitle = "determined by routing with or against ocean currents", x="Voyage efficiency", y="number of voyages") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(~ Nationality)
+```
+
+Lets also print the mean and median values of the route efficiencies.
+
+```{r}
+print("Mean efficiency value:")
+mean(CLIWOC_route_SF_raster_line$route_effeciency)
+print("Median efficiency value:")
+median(CLIWOC_route_SF_raster_line$route_effeciency)
+```
+
+Let's also try calculating the mean by nation.
+```{r}
+print("dutch mean effieciency:")
+dutch <- CLIWOC_route_SF_raster_line %>% 
+  filter(Nationality == "DUTCH")
+mean(dutch$route_effeciency)
+
+print("spanish mean effieciency:")
+spanish <- CLIWOC_route_SF_raster_line %>% 
+  filter(Nationality == "SPANISH")
+mean(spanish$route_effeciency)
+
+print("british mean effieciency:")
+british <- CLIWOC_route_SF_raster_line %>% 
+  filter(Nationality == "BRITISH")
+mean(british$route_effeciency)
+
+print("french mean effieciency:")
+french <- CLIWOC_route_SF_raster_line %>% 
+  filter(Nationality == "FRENCH")
+mean(french$route_effeciency)
+```
+
+It seems like the Dutch really love to sail efficient routes. However, this might just be to the favorable placement of colonies in Indonesia, as it allows them to travel almost constantly with the currents. Lets see if we can confirm that theory later.
+
+Some people like their results normalised, so lets also quickly do that
+```{r}
+# Normalising data
+Cliwoc_norm <- CLIWOC_route_SF_raster_line
+
+Cliwoc_norm$norm_effeciency <- rescale(Cliwoc_norm$route_effeciency) # The actual normalising is done here!
+```
+
+```{r}
+ggplot(Cliwoc_norm, aes(x = norm_effeciency)) +
+  geom_histogram(col="black", fill="grey", bins=20) +
+  labs(title = "Histogram of voyage efficiency (normalised)", subtitle = "determined by routing with or against ocean currents") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5))
+
+ggplot(Cliwoc_norm, aes(x = norm_effeciency)) +
+  geom_histogram(col="black", fill="grey", bins=20) +
+  labs(title = "Histogram of voyage efficiency - by nation (normalised)", subtitle = "determined by routing with or against ocean currents") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(~ Nationality)
+```
+
+```{r}
+mean(Cliwoc_norm$norm_effeciency)
+```
+
+##Plotting results##
+So now to the big reveal. How efficient were the routes taken in the age of sail, and can we see any clear differences in what routes are more efficient.
+
+```{r}
+# All voyages 
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_norm, aes(col=route_effeciency), lwd=0.007, alpha=0.74, key_glyph="rect") +
+  labs(title = "Voyage efficiency", subtitle = "After taking general direction into account") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  scale_color_gradientn(colors = c("red","green"), limits = c(-50,125), oob=squish) # without these limits, routes that normaly would be characterized as very good due to their efficiency scores appear mediocre. This is due to a few outliers having positive scores above 150. 
+
+# Voyages efficiency by nation
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_norm, aes(col=route_effeciency), lwd=0.007, alpha=0.74, key_glyph="rect") +
+  labs(title = "Voyage efficiency", subtitle = "After taking general direction into account") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  facet_wrap(~ Nationality) +
+  scale_color_gradientn(colors = c("red","green"), limits = c(-50,125), oob=squish)
+```
+
+Wow! It is clear to see that some routes are more efficient than others. Our theory about the dutch heavily utilizing the favorable position of their colonies also seems to be true - at least on the journy home. More about the results and its shortcomings can be found in the final report. 
+
+One thing that stands out is how many ships forgo a more efficient route around the Cape of Africa by not going further south. It even seems like alot of ships head to Cape Town instead. It is quite crowded down there, so lets try zooming in.
+```{r}
+#Location of capetown
+Cape_town <- data.frame(lat = numeric(), long=numeric(), name=character())
+Cape_town[1,] <- c(-33.918861,18.423300, "Cape Town / Kaapstad")
+Cape_town <- st_as_sf(Cape_town, coords = c("long", "lat"), crs = 4326)
+
+# The cape of Africa
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Cliwoc_norm, aes(col=route_effeciency), lwd=0.01, key_glyph="rect") +
+  geom_sf(data = Cape_town, shape=23, fill="dark red") +
+  geom_label(label="Cape Town / Kaapstad", x=25, y=-31, label.size = 0.35) +
+  labs(title = "Cape of Africa") +
+  coord_sf(xlim=c(0,40), ylim = c(-10,-45)) +
+  theme(plot.title = element_text(hjust=0.5, size = 16)) +
+  scale_color_gradientn(colors = c("red","green"), limits = c(-50,125), oob=squish)
+```
+
+That seems to be the case!
+
+Lets try plotting only inefficient routes to see if we can see any patterns. I've defined routes below -10 as being inefficient. Although the cut could be made at 0, many routes that might be in a bad currents for only a short while, without any viable alternative, would be included. To try an combate this problem just a little bit, the bar was raised (or lowered i guess).
+
+```{r}
+# Filtering to only inefficient routes
+ineffecient_routes <- Cliwoc_norm %>% 
+  filter(route_effeciency <= -10)
+
+# Plotting inefficient routes.
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=ineffecient_routes, aes(col=route_effeciency), lwd=0.025, key_glyph="rect") +
+  labs(title = "Inefficient voyages", subtitle = "All voyages with a route efficieny score below -10") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  scale_color_gradientn(colors = c("red","yellow"))
+```
+
+##Visualisation of missing ocean currents##
+The last thing this script will do is to quickly visualise where the north-south currents might have made an impact on the efficiency results above. To do this a polygon shape object from a geojson file is used.
+```{r}
+# Loading the data
+currents_map <- geojson_sf("data/Major_Ocean_Currents.geojson")
+```
+
+I'm going to cut right to the chase and focus on only eastward going routes in the north-east Atlantic, as i this is one of the crucial places a north-south current could have an impact.
+
+```{r}
+Eastern_voyages <- Cliwoc_norm %>% 
+  filter(direction == "East going")
+
+# Plotting the currents and eastgoing routes
+ggplot(world) +
+  geom_sf(lwd=0.1) +
+  geom_sf(data=Eastern_voyages, col="red", lwd=0.007, key_glyph="rect") +
+  geom_sf(data=currents_map, col="blue", fill="blue") +
+  labs(title = "Voyages and currents in the northeast atlantic", subtitle = "Eastern voyages (red) overlaid with ocean currents (blue)") +
+  theme(plot.title = element_text(hjust=0.5, size = 16), plot.subtitle = element_text(hjust=0.5)) +
+  coord_sf(xlim=c(-60,10), ylim = c(10,60))
+```
+
+That is all the script intends to do. Feel free to play around and improve the code if you want. :)
+
+Thanks for reading.
+
