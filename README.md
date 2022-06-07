@@ -4,9 +4,6 @@ Repository for the spatial assignment - Sea voyages in the 18th and 19th century
 ## ------ SCRIPT DESCRIPTION ------
 This repository contains a R-markdown script that takes data from CLIWOC and Globcurrents to asses sea routes and how effeciency they are in choosing routes that sail with the surface currents of the ocean.
 
-## ------ METHODS ------
-
-
 ## ------ DATA ------
 This script mainly utilises two datasets.
 
@@ -27,7 +24,11 @@ Finally a geojson containing a shapefile of the currents was used to illustrate 
 - This folder contains all data used by the r-markdown
 - The .RData files are created by the script, but can be downloaded instead, as the code needed to create them take 1.5-2.5 hours each.
 
+"relevant_reading" FOLDER:
+- This folder includes .pfd's of litterature relevant to this project.
+
 ## ------ SCRIPT USAGE ------
 The code should work without any major input from the user. The only exception is if the user wants to run the code chunks that last 1.5+ hours instead of loading the pre-created data. In that case the user needs to uncomment the relevant codechucks and comment out the following "readRDS()" code.
 
 ## ------ RESULTS ------
+In the age of sail ships had to navigate by the rules of nature. Even though the shortest and most direct routes to wealthy or important areas may seem like the most logical, ships often chose completely different and far longer routes. While still primarily sailing between the nations respective spheres of influence, Although the results of this assignment have been undercut by the lack of north-south currents, a clear tendency to choose efficient routes that follow currents can be observed. Especially the route between Indonesia and Europe, sailed primarily by the Dutch, can be noted for its high efficiency. 
